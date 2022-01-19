@@ -1,0 +1,118 @@
+#!/usr/bin/env python3
+#
+# CS3700, Fall 2021
+# TCP Project Starter Code
+
+
+import datetime
+import json
+import sys
+import socket
+
+from base64 import b64decode
+
+# MSG Fields:
+SEQ = "sequence"
+ACK = "ack"
+SACK = "sack"
+EOF = "eof"
+DATA = "data"
+
+##############################################################
+
+
+# Receiver Fields
+received_packets = []
+total_data_read = 0
+
+
+def log(string):
+    sys.stderr.write(datetime.datetime.now().strftime("%H:%M:%S.%f") + " 3700recv: " + string + "\n")
+
+
+MSG_SIZE = 1500
+TIMEOUT = 30
+
+# Bind to localhost and an ephemeral port
+UDP_IP = "127.0.0.1"
+UDP_PORT = int(sys.argv[1])
+
+# Set up the socket
+sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+sock.bind((UDP_IP, UDP_PORT))
+sock.settimeout(TIMEOUT)
+
+# Get port we bound to
+UDP_PORT = sock.getsockname()[1]
+log("[bound] " + str(UDP_PORT))
+
+
+def handle_received_packets():
+    """ Handles all the packets we've received and write them to stdout in order"""
+    global received_packets, total_data_read
+    packets_sorted = sorted(received_packets, key=lambda packet: packet[SEQ])
+    for pkt in packets_sorted:
+        if pkt[SEQ] == total_data_read:
+            sys.stdout.buffer.write(b64decode(pkt[DATA].encode()))
+            total_data_read = pkt[SEQ] + len(b64decode(pkt[DATA].encode()))
+    # Set the list of received packets to all the packets we haven't written yet
+    received_packets = list(filter(lambda packet: packet[SEQ] > total_data_read, packets_sorted))
+
+
+# Now listen for packets
+while True:
+    result = sock.recvfrom(MSG_SIZE)
+
+    # If nothing is ready, we hit the timeout
+    if result:
+        (data, addr) = result
+
+        try:
+            decoded = json.loads(data.decode())
+
+            # If the EOF flag is set, exit
+            if (decoded['eof']):
+                    log("[completed]")
+                    for i in range(5):
+                        # Transmit ACK back to sender 5 times, in order to ensure they got it
+                        msg = json.dumps({ACK: decoded['sequence'], SACK: decoded[SEQ]})
+                        log("ABOUT TO SEND " + msg)
+                        sent = sock.sendto(msg.encode(), addr)
+                        log("[sent] " + str(sent))
+                        if sent < len(msg):
+                            log("[error] unable to fully send packet")
+                    sys.exit(0)
+            else:
+                # If there is data, we accept it and print it out
+                if (decoded[DATA]):
+                    seq_number = decoded[SEQ]
+
+                    curr_sequence_numbers = list(map(lambda packet: packet[SEQ], received_packets))
+                    if seq_number >= total_data_read and not seq_number in curr_sequence_numbers:
+                        if seq_number == total_data_read:
+                            log("[recv data] " + str(seq_number) + " (" + str(
+                                len(b64decode(decoded[DATA]))) + ") ACCEPTED (in-order)")
+                        else:
+                            log("[recv data] " + str(seq_number) + " (" + str(
+                                len(b64decode(decoded[DATA]))) + ") ACCEPTED (out-of-order)")
+                        received_packets.append(decoded)
+
+                    else:
+                        log("DUPLICATE PACKET")
+
+                handle_received_packets()
+
+                # Send back an ack to the sender
+                msg = json.dumps({ACK: total_data_read, SACK: decoded[SEQ]})
+                log("ABOUT TO SEND " + msg)
+                sent = sock.sendto(msg.encode(), addr)
+                log("[sent] " + str(sent))
+                if sent < len(msg):
+                    log("[error] unable to fully send packet")
+
+        except (ValueError, KeyError, TypeError) as e:
+            log("[recv corrupt packet]")
+            raise e
+    else:
+        log("[error] timeout")
+        sys.exit(-1)
