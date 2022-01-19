@@ -1,5 +1,5 @@
 # Reliable Transport 
-** This project is for Networks and Distributed Systems (CS3700) at Northeastern University.**
+*This project is for Networks and Distributed Systems (CS3700) at Northeastern University.*
 
 ***
 Mouhamadou Sissoko and Candice Mac -- 11-06-21 --
