@@ -7,7 +7,6 @@ Mouhamadou Sissoko and Candice Mac -- 11-06-21 --
 This program is a reliable transport protocol that provides reliable datagram services on top of user datagram protocol
 
 ## Important Modules
-
 ***
 
 * **sys**: used to write and read from standard in/out
@@ -17,7 +16,6 @@ This program is a reliable transport protocol that provides reliable datagram se
 * **datatime**: used to keep track of time of every action we do
 
 ## Key Features
-
 ***
 
 ## Sending:
